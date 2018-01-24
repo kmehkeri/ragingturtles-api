@@ -33,7 +33,7 @@ object RagingTurtles extends App with Config {
 
   // Setup actors
   val accountManager = actorSystem.actorOf(Props[AccountManager], "account_manager")
-  val gameManager = actorSystem.actorOf(Props(new GameManager(new InMemoryGameRepository)), "game_manager")
+  val gameService = new GameService(new InMemoryGameRepository)
 
   // Routes
   val route =
@@ -41,7 +41,7 @@ object RagingTurtles extends App with Config {
     (post & path("account") & entity(as[Account])) { account =>
       val createAccountF = accountManager ? CreateAccount(account)
       onSuccess(createAccountF) {
-        case reply => complete(StatusCodes.Created)
+        case _ => complete(StatusCodes.Created)
       }
     } ~
       // Authentication
@@ -65,30 +65,36 @@ object RagingTurtles extends App with Config {
         }
       } ~
       // Games
-      (get & path("games")) {
-        complete(StatusCodes.OK)
-      } ~
-      (post & path("games")) {
-        complete(StatusCodes.OK)
-      } ~
-      (get & path("games" / JavaUUID)) { gameId =>
-        val gameF = gameManager ? GetGame(gameId)
-        complete(StatusCodes.OK)
-      } ~
-      (put & path("games" / JavaUUID / "join")) { gameId =>
-        requiredSession(oneOff, usingCookies) { sessionUsername =>
-          complete(StatusCodes.OK)
-        }
-      } ~
-      (put & path("games" / JavaUUID / "start")) { gameId =>
-        requiredSession(oneOff, usingCookies) { sessionUsername =>
-          complete(StatusCodes.OK)
-        }
-      } ~
-      (put & path("games" / JavaUUID / "turn")) { gameId =>
-        requiredSession(oneOff, usingCookies) { sessionUsername =>
-          complete(StatusCodes.OK)
-        }
+      requiredSession(oneOff, usingCookies) { sessionUsername =>
+        (get & path("games")) {
+          val games = gameService.findGames()
+          complete(StatusCodes.OK -> games)
+        } ~
+          (post & path("games")) {
+            val game: Game = gameService.createGame(sessionUsername)
+            complete(StatusCodes.Created -> game)
+          } ~
+          (get & path("games" / JavaUUID)) { gameId =>
+            gameService.getGame(gameId) match {
+              case Some(game) => complete(StatusCodes.OK, game)
+              case None => complete(StatusCodes.NotFound)
+            }
+          } ~
+          (put & path("games" / JavaUUID / "join")) { gameId =>
+            requiredSession(oneOff, usingCookies) { sessionUsername =>
+              complete(StatusCodes.OK)
+            }
+          } ~
+          (put & path("games" / JavaUUID / "start")) { gameId =>
+            requiredSession(oneOff, usingCookies) { sessionUsername =>
+              complete(StatusCodes.OK)
+            }
+          } ~
+          (put & path("games" / JavaUUID / "turn")) { gameId =>
+            requiredSession(oneOff, usingCookies) { sessionUsername =>
+              complete(StatusCodes.OK)
+            }
+          }
       }
 
   // Run server
