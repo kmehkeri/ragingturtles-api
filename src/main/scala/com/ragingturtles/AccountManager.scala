@@ -2,6 +2,7 @@ package com.ragingturtles
 
 import akka.actor.Actor
 import akka.actor.ActorLogging
+import com.ragingturtles.domain.Account
 
 final case class CreateAccount(account: Account)
 

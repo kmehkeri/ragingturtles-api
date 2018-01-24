@@ -1,12 +1,12 @@
-package com.ragingturtles
+package com.ragingturtles.domain
 
 import java.util.UUID
 
-import com.ragingturtles.Color._
-import com.ragingturtles.Action._
+import com.ragingturtles.domain.Actions._
+import com.ragingturtles.domain.Colors._
+import com.ragingturtles.Implicits._
 
 import scala.util.{Random, Try}
-import Implicits._
 
 /** Represents a player taking part in game */
 case class Player(username: String, isLeader: Boolean, color: Option[Color] = None, isActive: Boolean = false,
@@ -43,7 +43,7 @@ object GameStatus extends Enumeration {
   val Init, Playing, Completed = Value
 }
 
-import GameStatus._
+import com.ragingturtles.domain.GameStatus._
 
 /** Main game class */
 case class Game(id: UUID, players: List[Player], turtles: List[Turtle] = Nil, status: GameStatus = Init,
@@ -64,14 +64,14 @@ case class Game(id: UUID, players: List[Player], turtles: List[Turtle] = Nil, st
   def start: Game = {
     require(players.length >= MIN_PLAYERS)
 
-    val colorAssignments = Random.shuffle(Color.baseValues.toList)
+    val colorAssignments = Random.shuffle(Colors.baseValues.toList)
     val deck = Random.shuffle(Deck.cards)
     val startingCardSets = deck.take(players.length * STARTING_CARDS).grouped(STARTING_CARDS).toList
     val startingPlayerFlags = Random.shuffle(true :: List.fill(players.length - 1)(false))
     val initializedPlayers = (players, colorAssignments, startingCardSets, startingPlayerFlags).zipped.toList.map {
       case (player, assignedColor, startingCards, isStartingPlayer) => player.initialize(assignedColor, startingCards, isStartingPlayer)
     }
-    val turtles = Color.baseValues.toList.map(Turtle(_))
+    val turtles = Colors.baseValues.toList.map(Turtle(_))
 
     Game(id, initializedPlayers, turtles, Playing, deck.drop(players.length * STARTING_CARDS))
   }
@@ -81,7 +81,7 @@ case class Game(id: UUID, players: List[Player], turtles: List[Turtle] = Nil, st
     require(status == Playing)
     require(move.username == activePlayer.username)
     require(activePlayer.cards.contains(move.card))
-    require(Color.baseValues.contains(move.color))
+    require(Colors.baseValues.contains(move.color))
     require(move.card.color == Wild || (move.card.color == Last && lastTurtles.map(_.color).contains(move.color)) || move.card.color == move.color)
   }
 

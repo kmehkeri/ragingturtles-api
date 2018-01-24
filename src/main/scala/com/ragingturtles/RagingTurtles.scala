@@ -1,5 +1,6 @@
 package com.ragingturtles
 
+import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import akka.actor.ActorSystem
 import akka.actor.Props
@@ -8,22 +9,15 @@ import akka.stream.ActorMaterializer
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.pattern.ask
 import akka.util.Timeout
+import com.ragingturtles.domain._
+import com.ragingturtles.JsonSupport._
 import com.softwaremill.session.{SessionConfig, SessionManager}
 import com.softwaremill.session.SessionDirectives._
 import com.softwaremill.session.SessionOptions._
 
-import concurrent.duration._
-import spray.json._
-
-trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
-  implicit val accountFormat = jsonFormat2(Account)
-  implicit val sessionFormat = jsonFormat1(Session)
-}
-
-object RagingTurtles extends App with Config with JsonSupport {
+object RagingTurtles extends App with Config {
   // Akka / actor system configuration
   implicit val actorSystem = ActorSystem("raging_turtles")
   implicit val actorMaterializer = ActorMaterializer()
@@ -39,50 +33,63 @@ object RagingTurtles extends App with Config with JsonSupport {
 
   // Setup actors
   val accountManager = actorSystem.actorOf(Props[AccountManager], "account_manager")
+  val gameManager = actorSystem.actorOf(Props(new GameManager(new InMemoryGameRepository)), "game_manager")
 
   // Routes
   val route =
-    // Root
-    get {
-      pathSingleSlash {
-        complete(StatusCodes.OK)
-      }
-    } ~
     // Registration
-    post {
-      path("account") {
-        entity(as[Account]) { account =>
-          val createAccountF = accountManager ? CreateAccount(account)
-          onSuccess(createAccountF) {
-            case reply => complete(StatusCodes.Created)
-          }
-        }
+    (post & path("account") & entity(as[Account])) { account =>
+      val createAccountF = accountManager ? CreateAccount(account)
+      onSuccess(createAccountF) {
+        case reply => complete(StatusCodes.Created)
       }
     } ~
-    // Authentication
-    path("session") {
-      post {
-        entity(as[Account]) { account =>
-          log.info(s"Logging in as ${account.username}")
-          setSession(oneOff, usingCookies, account.username) {
-            complete(StatusCodes.OK)
-          }
+      // Authentication
+      (post & path("session") & entity(as[Account])) { account =>
+        log.info(s"Logging in as ${account.username}")
+        setSession(oneOff, usingCookies, account.username) {
+          complete(StatusCodes.OK)
         }
       } ~
-      get {
+      (get & path("session")) {
         requiredSession(oneOff, usingCookies) { sessionUsername =>
           complete(Session(sessionUsername))
         }
       } ~
-      delete {
+      (delete & path("session")) {
         requiredSession(oneOff, usingCookies) { sessionUsername =>
           log.info(s"Logging out ${sessionUsername}")
           invalidateSession(oneOff, usingCookies) {
             complete(StatusCodes.OK)
           }
         }
+      } ~
+      // Games
+      (get & path("games")) {
+        complete(StatusCodes.OK)
+      } ~
+      (post & path("games")) {
+        complete(StatusCodes.OK)
+      } ~
+      (get & path("games" / JavaUUID)) { gameId =>
+        val gameF = gameManager ? GetGame(gameId)
+        complete(StatusCodes.OK)
+      } ~
+      (put & path("games" / JavaUUID / "join")) { gameId =>
+        requiredSession(oneOff, usingCookies) { sessionUsername =>
+          complete(StatusCodes.OK)
+        }
+      } ~
+      (put & path("games" / JavaUUID / "start")) { gameId =>
+        requiredSession(oneOff, usingCookies) { sessionUsername =>
+          complete(StatusCodes.OK)
+        }
+      } ~
+      (put & path("games" / JavaUUID / "turn")) { gameId =>
+        requiredSession(oneOff, usingCookies) { sessionUsername =>
+          complete(StatusCodes.OK)
+        }
       }
-    }
 
   // Run server
   val bindingFuture = Http().bindAndHandle(route, httpHost, httpPort)

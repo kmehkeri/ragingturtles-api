@@ -1,4 +1,4 @@
-package com.ragingturtles
+package com.ragingturtles.domain
 
 case class Account(username: String, password: String)
 
