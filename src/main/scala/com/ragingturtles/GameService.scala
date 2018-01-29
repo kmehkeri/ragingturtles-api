@@ -17,10 +17,13 @@ class GameService(gameRepository: GameRepository) {
     game
   }
 
-  def joinGame(game: Game, username: String) = ???
+  def joinGame(gameId: UUID, username: String): Option[Game] =
+    gameRepository.act(gameId) { game => game.join(username) }
 
-  def startGame(game: Game) = ???
+  def startGame(gameId: UUID): Option[Game] =
+    gameRepository.act(gameId) { game => game.start }
 
-  def makeMove(game: Game, move: Move) = ???
+  def makeMove(gameId: UUID, move: Move): Option[Game] =
+    gameRepository.act(gameId) { game => game.makeMove(move) }
 
 }

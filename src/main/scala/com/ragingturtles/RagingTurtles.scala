@@ -81,18 +81,21 @@ object RagingTurtles extends App with Config {
             }
           } ~
           (put & path("games" / JavaUUID / "join")) { gameId =>
-            requiredSession(oneOff, usingCookies) { sessionUsername =>
-              complete(StatusCodes.OK)
+            gameService.joinGame(gameId, sessionUsername) match {
+              case Some(game) => complete(StatusCodes.OK, game)
+              case None => complete(StatusCodes.NotFound)
             }
           } ~
           (put & path("games" / JavaUUID / "start")) { gameId =>
-            requiredSession(oneOff, usingCookies) { sessionUsername =>
-              complete(StatusCodes.OK)
+            gameService.startGame(gameId) match {
+              case Some(game) => complete(StatusCodes.OK, game)
+              case None => complete(StatusCodes.NotFound)
             }
           } ~
-          (put & path("games" / JavaUUID / "turn")) { gameId =>
-            requiredSession(oneOff, usingCookies) { sessionUsername =>
-              complete(StatusCodes.OK)
+          (put & path("games" / JavaUUID / "move") & entity(as[Move])) { (gameId, move) =>
+            gameService.makeMove(gameId, move) match {
+              case Some(game) => complete(StatusCodes.OK, game)
+              case None => complete(StatusCodes.NotFound)
             }
           }
       }
