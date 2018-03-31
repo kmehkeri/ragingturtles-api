@@ -1,8 +1,9 @@
-package com.ragingturtles
+package com.ragingturtles.services
 
 import java.util.UUID
 
 import com.ragingturtles.domain.{Game, Move}
+import com.ragingturtles.repositories.GameRepository
 
 class GameService(gameRepository: GameRepository) {
   def findGames(username: Option[String] = None): Array[Game] =

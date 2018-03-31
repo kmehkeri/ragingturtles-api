@@ -1,4 +1,4 @@
-package com.ragingturtles
+package com.ragingturtles.repositories
 
 import java.util.UUID
 

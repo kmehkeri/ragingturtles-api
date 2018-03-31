@@ -3,19 +3,15 @@ package com.ragingturtles
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import akka.actor.ActorSystem
-import akka.actor.Props
 import akka.event.Logging
 import akka.stream.ActorMaterializer
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import akka.pattern.ask
 import akka.util.Timeout
-import com.ragingturtles.domain._
-import com.ragingturtles.JsonSupport._
+import com.ragingturtles.repositories._
+import com.ragingturtles.routes._
+import com.ragingturtles.services._
 import com.softwaremill.session.{SessionConfig, SessionManager}
-import com.softwaremill.session.SessionDirectives._
-import com.softwaremill.session.SessionOptions._
 
 object RagingTurtles extends App with Config {
   // Akka / actor system configuration
@@ -31,77 +27,15 @@ object RagingTurtles extends App with Config {
   val sessionConfig = SessionConfig.default(serverSecret)
   implicit val sessionManager = new SessionManager[String](sessionConfig)
 
-  // Setup actors
-  val accountManager = actorSystem.actorOf(Props[AccountManager], "account_manager")
+  // Setup services
+  val accountService = new AccountService
   val gameService = new GameService(new InMemoryGameRepository)
 
   // Routes
-  val route =
-    // Registration
-    (post & path("account") & entity(as[Account])) { account =>
-      val createAccountF = accountManager ? CreateAccount(account)
-      onSuccess(createAccountF) {
-        case _ => complete(StatusCodes.Created)
-      }
-    } ~
-      // Authentication
-      (post & path("session") & entity(as[Account])) { account =>
-        log.info(s"Logging in as ${account.username}")
-        setSession(oneOff, usingCookies, account.username) {
-          complete(StatusCodes.OK)
-        }
-      } ~
-      (get & path("session")) {
-        requiredSession(oneOff, usingCookies) { sessionUsername =>
-          complete(Session(sessionUsername))
-        }
-      } ~
-      (delete & path("session")) {
-        requiredSession(oneOff, usingCookies) { sessionUsername =>
-          log.info(s"Logging out ${sessionUsername}")
-          invalidateSession(oneOff, usingCookies) {
-            complete(StatusCodes.OK)
-          }
-        }
-      } ~
-      // Games
-      requiredSession(oneOff, usingCookies) { sessionUsername =>
-        (get & path("games")) {
-          val games = gameService.findGames()
-          complete(StatusCodes.OK -> games)
-        } ~
-          (post & path("games")) {
-            val game: Game = gameService.createGame(sessionUsername)
-            complete(StatusCodes.Created -> game)
-          } ~
-          (get & path("games" / JavaUUID)) { gameId =>
-            gameService.getGame(gameId) match {
-              case Some(game) => complete(StatusCodes.OK, game)
-              case None => complete(StatusCodes.NotFound)
-            }
-          } ~
-          (put & path("games" / JavaUUID / "join")) { gameId =>
-            gameService.joinGame(gameId, sessionUsername) match {
-              case Some(game) => complete(StatusCodes.OK, game)
-              case None => complete(StatusCodes.NotFound)
-            }
-          } ~
-          (put & path("games" / JavaUUID / "start")) { gameId =>
-            gameService.startGame(gameId) match {
-              case Some(game) => complete(StatusCodes.OK, game)
-              case None => complete(StatusCodes.NotFound)
-            }
-          } ~
-          (put & path("games" / JavaUUID / "move") & entity(as[Move])) { (gameId, move) =>
-            gameService.makeMove(gameId, move) match {
-              case Some(game) => complete(StatusCodes.OK, game)
-              case None => complete(StatusCodes.NotFound)
-            }
-          }
-      }
+  val routes = new AccountRoutes(accountService).routes ~ new GameRoutes(gameService).routes
 
   // Run server
-  val bindingFuture = Http().bindAndHandle(route, httpHost, httpPort)
+  val bindingFuture = Http().bindAndHandle(routes, httpHost, httpPort)
 
   bindingFuture.onComplete {
     case Success(b) => {
